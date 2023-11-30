@@ -83,6 +83,18 @@ class PlayerCar(AbstractCar):
         self.vel = -self.vel
         self.move()
 
+class Player2Car(AbstractCar):
+    IMG = GREEN_CAR
+    START_POS = (300, 280)
+
+    def reduce_speed(self):
+        self.vel = max(self.vel - self.acceleration / 2, 0)
+        self.move()
+
+    def bounce(self):
+        self.vel = -self.vel
+        self.move()
+
 class Scoreboard:
     def __init__(self):
         self.font = pygame.font.Font(None, 36)
@@ -96,21 +108,6 @@ class Scoreboard:
         score_text = self.font.render(f"Score: {self.score} seconds", True, (255, 255, 255))
         win.blit(score_text, (WIDTH - 200, 10))
 
-def draw_menu(win):
-    font = pygame.font.Font(None, 50)
-    start_text = font.render("Start Game", True, (255, 255, 255))
-    scoreboard_text = font.render("Scoreboard", True, (255, 255, 255))
-    quit_text = font.render("Quit", True, (255, 255, 255))
-
-    start_rect = start_text.get_rect(center=(WIDTH // 2, HEIGHT // 2 - 50))
-    scoreboard_rect = scoreboard_text.get_rect(center=(WIDTH // 2, HEIGHT // 2))
-    quit_rect = quit_text.get_rect(center=(WIDTH // 2, HEIGHT // 2 + 50))
-
-    win.blit(start_text, start_rect)
-    win.blit(scoreboard_text, scoreboard_rect)
-    win.blit(quit_text, quit_rect)
-
-    return start_rect, scoreboard_rect, quit_rect
 
 def show_scoreboard():
     scoreboard_window = pygame.display.set_mode((300, 200))
@@ -140,27 +137,6 @@ def show_scoreboard():
 def save_score(score):
     with open("scores.txt", "a") as file:
         file.write(f"{score}\n")
-def menu():
-    menu_run = True
-    start_rect, scoreboard_rect, quit_rect = draw_menu(WIN)
-
-    while menu_run:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit()
-                quit()
-
-            if event.type == pygame.MOUSEBUTTONDOWN:
-                mouse_pos = pygame.mouse.get_pos()
-                if start_rect.collidepoint(mouse_pos):
-                    return True
-                elif scoreboard_rect.collidepoint(mouse_pos):
-                    show_scoreboard()
-                elif quit_rect.collidepoint(mouse_pos):
-                    pygame.quit()
-                    quit()
-
-        pygame.display.update()
 
 
 def draw_timer(win, time_elapsed):
@@ -168,20 +144,21 @@ def draw_timer(win, time_elapsed):
     timer_text = font.render(f"Time: {time_elapsed} seconds", True, (255, 255, 255))
     win.blit(timer_text, (10, 10))
 
-def draw(win, images, player_car):
+
+def draw(win, images, player_cars, scoreboard):
+    draw_surface = pygame.Surface(WIN.get_size())
+    draw_surface.fill((0, 0, 0))
+
     for img, pos in images:
-        win.blit(img, pos)
+        draw_surface.blit(img, pos)
 
-    player_car.draw(win)
-    pygame.display.update()
+    for player_car in player_cars:
+        player_car.draw(draw_surface)
 
-def draw(win, images, player_car, scoreboard):
-    for img, pos in images:
-        win.blit(img, pos)
+    scoreboard.draw(draw_surface)
 
-    player_car.draw(win)
-    scoreboard.draw(win)
-    pygame.display.update()
+    WIN.blit(draw_surface, (0, 0))
+
 
 def move_player(player_car):
     keys = pygame.key.get_pressed()
@@ -242,48 +219,59 @@ clock = pygame.time.Clock()
 
 images = [(GRASS, (0, 0)), (TRACK, (41, 11.8)),
           (FINISH, FINISH_POSITION), (TRACK_BORDER, (0, 0))]
-player_car = PlayerCar(2, 4)
+player_car1 = PlayerCar(2, 4)
+player_car2 = Player2Car(2, 4)
 
-menu_run = menu()
+start_time = pygame.time.get_ticks() // 1000
+scoreboard = Scoreboard()
 
-if menu_run:
-    start_time = pygame.time.get_ticks() // 1000
-    scoreboard = Scoreboard()
+while run:
+    clock.tick(FPS)
 
-    while run:
-        clock.tick(FPS)
+    current_time = pygame.time.get_ticks() // 1000
+    time_elapsed = current_time - start_time
 
-        current_time = pygame.time.get_ticks() // 1000
-        time_elapsed = current_time - start_time
+    scoreboard.update_score(time_elapsed)
 
-        scoreboard.update_score(time_elapsed)
+    draw(WIN, images, [player_car1, player_car2], scoreboard)
+    draw_timer(WIN, time_elapsed)
 
-        draw(WIN, images, player_car, scoreboard)
-        draw_timer(WIN, time_elapsed)
+    pygame.display.flip()
 
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                run = False
-                break
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            run = False
+            break
 
-        move_player(player_car)
+    move_player(player_car1)
 
-        if player_car.collide(TRACK_BORDER_MASK) is not None:
-            player_car.bounce()
+    keys = pygame.key.get_pressed()
+    if keys[pygame.K_LEFT]:
+        player_car2.rotate(left=True)
+    if keys[pygame.K_RIGHT]:
+        player_car2.rotate(right=True)
+    if keys[pygame.K_UP]:
+        player_car2.move_forward()
+    if keys[pygame.K_DOWN]:
+        player_car2.move_backward()
 
-        finish_poi_collide = player_car.collide(FINISH_MASK, *FINISH_POSITION)
-        if finish_poi_collide is not None:
-            if finish_poi_collide[1] == 0:
-                player_car.bounce()
-            else:
-                result = show_win_screen()
-                if result == "return":
-                    start_time = pygame.time.get_ticks() // 1000
-                    player_car.reset()
-                elif result == "menu":
-                    run = False
-                    break
+    if player_car1.collide(TRACK_BORDER_MASK) is not None:
+        player_car1.bounce()
 
-    pygame.quit()
+    if player_car2.collide(TRACK_BORDER_MASK) is not None:
+        player_car2.bounce()
 
+    finish_poi_collide1 = player_car1.collide(FINISH_MASK, *FINISH_POSITION)
+    finish_poi_collide2 = player_car2.collide(FINISH_MASK, *FINISH_POSITION)
+
+    if finish_poi_collide1 is not None or finish_poi_collide2 is not None:
+        result = show_win_screen()
+        if result == "return":
+            start_time = pygame.time.get_ticks() // 1000
+            player_car1.reset()
+            player_car2.reset()
+        elif result == "menu":
+            run = False
+            break
+        pygame.quit()
 pygame.quit()
